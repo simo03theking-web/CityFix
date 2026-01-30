@@ -1,0 +1,278 @@
+version: '3.8'
+
+networks:
+  cityfix-global-network:
+    driver: bridge
+    name: cityfix-global-network
+
+volumes:
+  mongodb-data:
+    driver: local
+  media-storage:
+    driver: local
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: cityfix-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-CityFixSecure123!}
+      MONGO_INITDB_DATABASE: cityfix
+    volumes:
+      - mongodb-data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - cityfix-global-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./src/AuthService
+      dockerfile: Dockerfile
+    container_name: cityfix-auth-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - SERVICE_NAME=AuthService
+      - SERVICE_PORT=8001
+      - MONGODB_URL=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-CityFixSecure123!}@mongodb:27017/cityfix?authSource=admin
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRE_MINUTES=1440
+      - ENVIRONMENT=production
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - cityfix-global-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Admin Service
+  admin-service:
+    build:
+      context: ./src/AdminService
+      dockerfile: Dockerfile
+    container_name: cityfix-admin-service
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      - SERVICE_NAME=AdminService
+      - SERVICE_PORT=8002
+      - MONGODB_URL=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-CityFixSecure123!}@mongodb:27017/cityfix?authSource=admin
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - ENVIRONMENT=production
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    networks:
+      - cityfix-global-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Ticket Service
+  ticket-service:
+    build:
+      context: ./src/TicketService
+      dockerfile: Dockerfile
+    container_name: cityfix-ticket-service
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    environment:
+      - SERVICE_NAME=TicketService
+      - SERVICE_PORT=8003
+      - MONGODB_URL=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-CityFixSecure123!}@mongodb:27017/cityfix?authSource=admin
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8006
+      - ENVIRONMENT=production
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    networks:
+      - cityfix-global-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Media Service
+  media-service:
+    build:
+      context: ./src/MediaService
+      dockerfile: Dockerfile
+    container_name: cityfix-media-service
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    environment:
+      - SERVICE_NAME=MediaService
+      - SERVICE_PORT=8004
+      - MONGODB_URL=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-CityFixSecure123!}@mongodb:27017/cityfix?authSource=admin
+      - UPLOAD_DIR=/app/uploads
+      - MAX_FILE_SIZE=10485760
+      - ALLOWED_EXTENSIONS=jpg,jpeg,png,gif,webp
+      - ENVIRONMENT=production
+    volumes:
+      - media-storage:/app/uploads
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - cityfix-global-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Geo Service
+  geo-service:
+    build:
+      context: ./src/GeoService
+      dockerfile: Dockerfile
+    container_name: cityfix-geo-service
+    restart: unless-stopped
+    ports:
+      - "8005:8005"
+    environment:
+      - SERVICE_NAME=GeoService
+      - SERVICE_PORT=8005
+      - MONGODB_URL=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-CityFixSecure123!}@mongodb:27017/cityfix?authSource=admin
+      - NOMINATIM_USER_AGENT=CityFixApp/1.0
+      - ENVIRONMENT=production
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - cityfix-global-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Notification Service
+  notification-service:
+    build:
+      context: ./src/NotificationService
+      dockerfile: Dockerfile
+    container_name: cityfix-notification-service
+    restart: unless-stopped
+    ports:
+      - "8006:8006"
+    environment:
+      - SERVICE_NAME=NotificationService
+      - SERVICE_PORT=8006
+      - MONGODB_URL=mongodb://${MONGO_ROOT_USER:-admin}:${MONGO_ROOT_PASSWORD:-CityFixSecure123!}@mongodb:27017/cityfix?authSource=admin
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-noreply@cityfix.app}
+      - ENVIRONMENT=production
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - cityfix-global-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Orchestrator Service
+  orchestrator:
+    build:
+      context: ./src/Orchestrator
+      dockerfile: Dockerfile
+    container_name: cityfix-orchestrator
+    restart: unless-stopped
+    ports:
+      - "8007:8007"
+    environment:
+      - SERVICE_NAME=Orchestrator
+      - SERVICE_PORT=8007
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - ADMIN_SERVICE_URL=http://admin-service:8002
+      - TICKET_SERVICE_URL=http://ticket-service:8003
+      - MEDIA_SERVICE_URL=http://media-service:8004
+      - GEO_SERVICE_URL=http://geo-service:8005
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8006
+      - ENVIRONMENT=production
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      admin-service:
+        condition: service_healthy
+      ticket-service:
+        condition: service_healthy
+      media-service:
+        condition: service_healthy
+      geo-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+    networks:
+      - cityfix-global-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Frontend (CityFixUI)
+  cityfixui:
+    build:
+      context: ./src/CityFixUI
+      dockerfile: Dockerfile
+    container_name: cityfix-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8007/api/v1
+      - VITE_ORCHESTRATOR_URL=http://orchestrator:8007
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    networks:
+      - cityfix-global-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

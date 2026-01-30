@@ -1,0 +1,48 @@
+version: '3.8'
+
+networks:
+  cityfix-global-network:
+    external: true
+
+services:
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cityfix-auth-service-dev
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - SERVICE_NAME=AuthService
+      - SERVICE_PORT=8001
+      - MONGODB_URL=mongodb://admin:CityFixSecure123!@mongodb:27017/cityfix?authSource=admin
+      - JWT_SECRET=dev-jwt-secret-key
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRE_MINUTES=1440
+      - ENVIRONMENT=development
+    volumes:
+      - ./src:/app/src
+      - ./.env:/app/.env
+    networks:
+      - cityfix-global-network
+    depends_on:
+      - mongodb
+
+  mongodb:
+    image: mongo:7.0
+    container_name: cityfix-mongodb-dev
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: CityFixSecure123!
+      MONGO_INITDB_DATABASE: cityfix
+    volumes:
+      - mongodb-dev-data:/data/db
+    networks:
+      - cityfix-global-network
+
+volumes:
+  mongodb-dev-data:

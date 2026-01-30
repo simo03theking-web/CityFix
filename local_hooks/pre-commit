@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# CityFix Pre-Commit Hook
+# Runs linting and code formatting checks before commit
+
+set -e
+
+echo "🔍 Running pre-commit checks..."
+
+# Check if Python files are being committed
+PYTHON_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+
+if [ -n "$PYTHON_FILES" ]; then
+    echo "📝 Checking Python files..."
+    
+    # Check if black is installed
+    if command -v black &> /dev/null; then
+        echo "  - Running Black formatter..."
+        echo "$PYTHON_FILES" | xargs black --check || {
+            echo "❌ Black formatting issues found. Run 'make format' to fix."
+            exit 1
+        }
+    fi
+    
+    # Check if pylint is installed
+    if command -v pylint &> /dev/null; then
+        echo "  - Running Pylint..."
+        echo "$PYTHON_FILES" | xargs pylint --rcfile=.pylintrc --exit-zero || true
+    fi
+fi
+
+# Check if TypeScript/JavaScript files are being committed
+TS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' || true)
+
+if [ -n "$TS_FILES" ]; then
+    echo "📝 Checking TypeScript/JavaScript files..."
+    
+    # Check if we're in the frontend directory
+    if [ -f "src/CityFixUI/package.json" ]; then
+        cd src/CityFixUI
+        
+        # Run ESLint
+        if [ -x "$(command -v npx)" ]; then
+            echo "  - Running ESLint..."
+            echo "$TS_FILES" | xargs npx eslint --max-warnings=0 || {
+                echo "❌ ESLint errors found. Please fix them before committing."
+                exit 1
+            }
+        fi
+        
+        cd ../..
+    fi
+fi
+
+# Check for merge conflict markers
+if git diff --cached --name-only | xargs grep -l '<<<<<<< \|=======$\|>>>>>>> ' 2>/dev/null; then
+    echo "❌ Merge conflict markers found. Please resolve conflicts before committing."
+    exit 1
+fi
+
+# Check for debug statements
+if git diff --cached --name-only | xargs grep -l 'console\.log\|debugger\|pdb\.set_trace\|import pdb' 2>/dev/null; then
+    echo "⚠️  Warning: Debug statements found. Consider removing them."
+    # Don't exit, just warn
+fi
+
+echo "✅ Pre-commit checks passed!"
+exit 0
