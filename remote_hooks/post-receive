@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# CityFix Post-Receive Hook
+# Triggers CI/CD pipeline after push to remote repository
+
+set -e
+
+echo "🚀 Post-receive hook triggered"
+
+# Get the branch name
+while read oldrev newrev refname; do
+    BRANCH=$(echo $refname | sed 's/refs\/heads\///')
+    
+    echo "📦 Received push to branch: $BRANCH"
+    
+    # Trigger Jenkins build for main and develop branches
+    if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "develop" ]; then
+        echo "🔨 Triggering Jenkins pipeline for $BRANCH..."
+        
+        # Jenkins webhook URL (configure in your environment)
+        JENKINS_URL="${JENKINS_URL:-http://jenkins:8080}"
+        JENKINS_JOB="${JENKINS_JOB:-CityFix-Pipeline}"
+        JENKINS_TOKEN="${JENKINS_TOKEN:-your-jenkins-token}"
+        
+        # Trigger Jenkins build
+        curl -X POST "$JENKINS_URL/job/$JENKINS_JOB/buildWithParameters?token=$JENKINS_TOKEN&branch=$BRANCH" || {
+            echo "⚠️  Failed to trigger Jenkins pipeline"
+        }
+    fi
+    
+    # Send notification (optional)
+    echo "✅ Post-receive hook completed for branch: $BRANCH"
+done
+
+exit 0

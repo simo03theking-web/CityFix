@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# CityFix Prepare Commit Message Hook
+# Provides a template for commit messages
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Only add template if it's a new commit (not amend, merge, etc.)
+if [ -z "$COMMIT_SOURCE" ]; then
+    # Check if message is empty or just comments
+    if ! grep -q '^[^#]' "$COMMIT_MSG_FILE"; then
+        cat > "$COMMIT_MSG_FILE" << 'EOF'
+# <type>(<scope>): <subject>
+#
+# <body>
+#
+# <footer>
+#
+# Type: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
+# Scope: auth, admin, ticket, media, geo, notification, orchestrator, frontend, infra
+# Subject: imperative, lowercase, no period at end, max 50 chars
+# Body: explain what and why vs. how, wrap at 72 chars
+# Footer: reference issues, breaking changes
+#
+# Example:
+# feat(ticket): add real-time status updates
+#
+# Implement WebSocket connection for live ticket status updates.
+# Citizens now receive immediate notifications when ticket status changes.
+#
+# Closes #123
+EOF
+    fi
+fi

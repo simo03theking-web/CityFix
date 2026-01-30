@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cityfix
+
+bases:
+  - ../../base
+
+namePrefix: dev-
+
+commonLabels:
+  environment: development
+
+replicas:
+  - name: auth-service
+    count: 1
+  - name: admin-service
+    count: 1
+  - name: ticket-service
+    count: 1
+  - name: media-service
+    count: 1
+  - name: geo-service
+    count: 1
+  - name: notification-service
+    count: 1
+  - name: orchestrator
+    count: 1
+  - name: frontend
+    count: 1
+
+patches:
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: "256Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "250m"
+    target:
+      kind: Deployment

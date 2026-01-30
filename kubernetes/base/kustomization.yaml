@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cityfix
+
+resources:
+  - namespace.yaml
+  - secrets.yaml
+  - mongodb-statefulset.yaml
+  - auth-service-deployment.yaml
+  - admin-service-deployment.yaml
+  - ticket-service-deployment.yaml
+  - media-service-deployment.yaml
+  - geo-service-deployment.yaml
+  - notification-service-deployment.yaml
+  - orchestrator-deployment.yaml
+  - frontend-deployment.yaml
+  - ingress.yaml
